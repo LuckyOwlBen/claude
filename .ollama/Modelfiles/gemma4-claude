@@ -1,0 +1,56 @@
+# ~/.ollama/Modelfiles/gemma4-claude
+# Gemma 4 26B MoE variant tuned for Claude Code agentic sessions.
+# Bakes context window, temperature, and system prompt into the model
+# so every Claude Code session starts with the correct configuration.
+#
+# Build with:
+#   mkdir -p ~/.ollama/Modelfiles
+#   ollama create gemma4-claude -f ~/.ollama/Modelfiles/gemma4-claude
+
+FROM gemma4:26b
+
+# Context window -- 65536 tokens (64K) is the tested-safe floor for real
+# codebases without triggering swap on 16-18 GB VRAM systems.
+# Increase to 131072 (128K) if you have headroom on 24 GB+ systems.
+# Do not go above 131072 unless you have profiled your memory usage
+# under load -- Ollama pre-allocates the full KV cache upfront.
+PARAMETER num_ctx 65536
+
+# Temperature -- 0.2 is deliberately low for agentic coding.
+# Higher temperature introduces variability in tool call parameter
+# formatting that causes Claude Code's tool validator to reject calls.
+# For creative tasks, you would set this higher. For agentic loops: low.
+PARAMETER temperature 0.2
+
+# top_p -- nucleus sampling threshold. 0.9 keeps generation focused
+# while avoiding the repetition loops that top_p=1.0 can produce on
+# long agentic sessions.
+PARAMETER top_p 0.9
+
+# repeat_penalty -- penalizes the model for repeating tokens.
+# 1.15 helps prevent tool call loops where Gemma 4 retries the same
+# failed tool call with nearly identical parameters indefinitely.
+PARAMETER repeat_penalty 1.15
+
+# num_predict -- maximum tokens per response. 4096 is sufficient for
+# most code patches. Increase to 8192 if you regularly generate
+# large files in a single generation.
+PARAMETER num_predict 4096
+
+# System prompt -- reinforces coding agent behavior and explicit
+# tool use discipline. Gemma 4 benefits from being reminded to
+# commit to tool calls rather than describing what it would do.
+SYSTEM """You are a senior software engineer operating as a coding agent.
+
+When working with code:
+- Read files before editing them. Never assume file contents.
+- Make one focused change at a time and verify it before proceeding.
+- When a tool call fails, examine the error carefully before retrying.
+  Do not retry with identical parameters. Diagnose first.
+- Prefer surgical edits over full file rewrites.
+- Run tests after each meaningful change, not after a batch of changes.
+- If you are uncertain about the codebase structure, read more files
+  rather than guessing.
+
+Be precise and methodical. Avoid explaining what you are about to do
+when you could simply do it."""
